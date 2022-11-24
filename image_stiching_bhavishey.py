@@ -150,7 +150,7 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
 
 
 # raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))
-num_imgs_to_use = 0
+num_imgs_to_use = 4
 raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))[:num_imgs_to_use+1]
 mosaic_name     = 'chandigarh_20images.png'
 
