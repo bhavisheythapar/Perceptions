@@ -126,20 +126,6 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         all_dst_pts = np.float32([ kp2[m.trainIdx].pt for m in all_points ]).reshape(-1,1,2)        
         M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC,reproj_thresh)
         
-        # Find the euclidean distance error
-        src_pts      = np.array(src_pts)    
-        dst_pts      = np.array(dst_pts)
-        dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
-        ones         = np.ones(len(src_pts))    
-        test_pts     = np.transpose(np.reshape(src_pts, (len(src_pts), 2)))
-        test_pts_hom = np.vstack((test_pts, ones))  
-        ## projecting the points in test image to collage image using homography matrix
-        projected_pts_H  = np.matmul(M, test_pts_hom)      
-        projected_pts_nH = np.transpose(np.array([np.true_divide(projected_pts_H[0,:], projected_pts_H[2,:]),                                                   np.true_divide(projected_pts_H[1,:], projected_pts_H[2,:])]))        
-        error     = int(np.sum(np.linalg.norm(projected_pts_nH-dst_pts, axis=1)))
-        avg_error = np.divide(np.array(error), np.array(len(src_pts)))     
-        avg_repro_error.append(avg_error)
-        
         # Apply homography to current image and obtain the resultant mosaic
         final_mosaic = stitch_images(final_mosaic, image, M)
         cv2.imwrite(mosaic_name, final_mosaic)        
@@ -147,6 +133,23 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         img_count += 1        
         if img_count==num_imgs_to_use:
             break
+        
+         ### NOT REQUIRED RIGHT NOW ####
+          ## Find the euclidean distance error
+#         src_pts      = np.array(src_pts)    
+#         dst_pts      = np.array(dst_pts)
+#         dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
+#         ones         = np.ones(len(src_pts))    
+#         test_pts     = np.transpose(np.reshape(src_pts, (len(src_pts), 2)))
+#         test_pts_hom = np.vstack((test_pts, ones))  
+#         ## projecting the points in test image to collage image using homography matrix
+#         projected_pts_H  = np.matmul(M, test_pts_hom)      
+#         projected_pts_nH = np.transpose(np.array([np.true_divide(projected_pts_H[0,:], projected_pts_H[2,:]),                                                   np.true_divide(projected_pts_H[1,:], projected_pts_H[2,:])]))        
+#         error     = int(np.sum(np.linalg.norm(projected_pts_nH-dst_pts, axis=1)))
+#         avg_error = np.divide(np.array(error), np.array(len(src_pts)))     
+#         avg_repro_error.append(avg_error)
+        
+        
     
     return avg_repro_error, matches_list
 
