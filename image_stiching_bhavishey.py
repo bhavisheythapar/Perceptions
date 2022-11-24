@@ -62,7 +62,6 @@ def stitch_images(img1, img2, H):
         img2 = img2[:,0:frame_size[1]-origin_c]    
             
     output_img[origin_r:new_image[0]+origin_r, origin_c:new_image[1]+origin_c] = img2
-    print("Here")
     return output_img
 
 
@@ -93,8 +92,10 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
     height, width = first_image.shape[:2]
     first_image   = cv2.resize(first_image, (int(width/4), int(height/4)))
     final_mosaic  = first_image
+    cv2.imwrite(mosaic_name, final_mosaic)
 
     while raw_image_list:
+
         image = cv2.imread(raw_image_list.pop(0))              
         height, width = image.shape[:2]        
         image = cv2.resize(image, (int(width/4), int(height/4)))
@@ -128,8 +129,7 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         
         # Apply homography to current image and obtain the resultant mosaic
         final_mosaic = stitch_images(final_mosaic, image, M)
-
-        cv2.imwrite(mosaic_name, final_mosaic)      
+        cv2.imwrite(mosaic_name, final_mosaic)
         
          ### NOT REQUIRED RIGHT NOW ####
           ## Find the euclidean distance error
