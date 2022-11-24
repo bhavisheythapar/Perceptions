@@ -4,15 +4,14 @@
 """
 Authors      : Aditya Jain & Bhavishey Thapar
 Date started : November 22, 2022
-About        : AER1515 Project project; image stitching for drone imagery
+About        : AER1515 Project; image stitching for drone imagery
 """
 
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 import glob
-import time
-import os
+
 
 def stitch_images(img1, img2, H):
     """
@@ -65,6 +64,7 @@ def stitch_images(img1, img2, H):
     
     return output_img
 
+
 def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name, 
                  num_featues=1000, reproj_thresh=5.0):
     """
@@ -84,8 +84,8 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
     """
     
     avg_repro_error = []  # list of average reprojection error
-    matches         = []  # list of number of good matches at every stage
-    sift            = cv2.SIFT(num_featues)
+    matches_list    = []  # list of number of good matches at every stage
+    sift            = cv2.SIFT_create(num_featues)
     
     # starting out with first image
     first_image   = cv2.imread(raw_image_list[0])
@@ -100,8 +100,8 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         image = cv2.resize(image, (int(width/4), int(height/4)))
 
         # Find the features
-        kp1, des1 = sift.detectAndCompute(final_mosaic,None)  
-        kp2, des2 = sift.detectAndCompute(image,None)
+        kp1, des1 = sift.detectAndCompute(cv2.cvtColor(final_mosaic,cv2.COLOR_BGR2GRAY),None)  
+        kp2, des2 = sift.detectAndCompute(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY),None)
         
         # Feature matching      
         FLANN_INDEX_KDTREE = 0
@@ -117,13 +117,13 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
             if m.distance < 0.7*n.distance:
                 good.append(m)                
             all_points.append(m)        
-        matches.append(len(good))        
+        matches_list.append(len(good))        
         
         # Find homography
         src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
         dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)        
-        all_src_pts = np.float32([ kp1[m.queryIdx].pt for m in allPoints ]).reshape(-1,1,2)
-        all_dst_pts = np.float32([ kp2[m.trainIdx].pt for m in allPoints ]).reshape(-1,1,2)        
+        all_src_pts = np.float32([ kp1[m.queryIdx].pt for m in all_points ]).reshape(-1,1,2)
+        all_dst_pts = np.float32([ kp2[m.trainIdx].pt for m in all_points ]).reshape(-1,1,2)        
         M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC,reproj_thresh)
         
         # Find the euclidean distance error
@@ -148,7 +148,8 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         if img_count==num_imgs_to_use:
             break
     
-    return avg_repro_error, matches
+    return avg_repro_error, matches_list
+
 
 raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))
 num_imgs_to_use = 20
@@ -156,9 +157,6 @@ mosaic_name     = 'chandigarh_20images.png'
 
 if __name__=='__main__':
     _, _ = build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name)
-
-
-
 
 
 
