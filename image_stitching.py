@@ -160,6 +160,3 @@ mosaic_name     = 'chandigarh_20images.png'
 
 if __name__=='__main__':
     _, _ = build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name)
-
-
-
