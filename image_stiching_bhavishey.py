@@ -101,62 +101,30 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         image = cv2.resize(image, (int(width/4), int(height/4)))
 
         # Find the features
-        kp1, des1 = sift.detectAndCompute(cv2.cvtColor(final_mosaic,cv2.COLOR_BGR2GRAY),None)  
-        kp2, des2 = sift.detectAndCompute(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY),None)
+        orb=cv2.ORB_create(num_featues)
+        kp1, des1 = orb.detectAndCompute(final_mosaic,None)
+        kp2, des2 = orb.detectAndCompute(image,None)
         
-        # Feature matching      
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-        search_params = dict(checks = 50)
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
-        matches = flann.knnMatch(des1,des2,k=2)        
+        # Match the features
+        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        matches = bf.match(des1,des2)
+        matches = sorted(matches, key = lambda x:x.distance)
+        src_pts=np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
+        dst_pts=np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
+        M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, reproj_thresh)
         
-        # Store all good matches as per Lowe's ratio test
-        good       = []
-        all_points = []
-        for m,n in matches:
-            if m.distance < 0.7*n.distance:
-                good.append(m)                
-            all_points.append(m)        
-        matches_list.append(len(good))        
-        
-        # Find homography
-        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)        
-        all_src_pts = np.float32([ kp1[m.queryIdx].pt for m in all_points ]).reshape(-1,1,2)
-        all_dst_pts = np.float32([ kp2[m.trainIdx].pt for m in all_points ]).reshape(-1,1,2)        
-        M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC,reproj_thresh)
-        
-        # Apply homography to current image and obtain the resultant mosaic
         final_mosaic = stitch_images(final_mosaic, image, M)
-        cv2.imwrite(mosaic_name, final_mosaic)
-        
-         ### NOT REQUIRED RIGHT NOW ####
-          ## Find the euclidean distance error
-#         src_pts      = np.array(src_pts)    
-#         dst_pts      = np.array(dst_pts)
-#         dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
-#         ones         = np.ones(len(src_pts))    
-#         test_pts     = np.transpose(np.reshape(src_pts, (len(src_pts), 2)))
-#         test_pts_hom = np.vstack((test_pts, ones))  
-#         ## projecting the points in test image to collage image using homography matrix
-#         projected_pts_H  = np.matmul(M, test_pts_hom)      
-#         projected_pts_nH = np.transpose(np.array([np.true_divide(projected_pts_H[0,:], projected_pts_H[2,:]),                                                   np.true_divide(projected_pts_H[1,:], projected_pts_H[2,:])]))        
-#         error     = int(np.sum(np.linalg.norm(projected_pts_nH-dst_pts, axis=1)))
-#         avg_error = np.divide(np.array(error), np.array(len(src_pts)))     
-#         avg_repro_error.append(avg_error)
+        cv2.imwrite(mosaic_name, final_mosaic) 
         
     return avg_repro_error, matches_list
 
-
-# raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))
-num_imgs_to_use = 4
+num_imgs_to_use = 1
 raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))[:num_imgs_to_use+1]
 mosaic_name     = 'chandigarh_20images.png'
 
 if __name__=='__main__':
     _, _ = build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name)
 
-final_img=Image.open(mosaic_name)
-final_img.show()
+cv2.imshow('mosaic', cv2.imread(mosaic_name))
+cv2.waitKey(0)
 
