@@ -66,7 +66,7 @@ def stitch_images(img1, img2, H):
 
 
 def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name, 
-                 num_featues=1000, reproj_thresh=5.0):
+                 num_featues=10000, reproj_thresh=5.0):
     """
     main function for image stitching 
     

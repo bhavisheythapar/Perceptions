@@ -66,7 +66,7 @@ def stitch_images(img1, img2, H):
 
 
 def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name, 
-                 num_featues=1000, reproj_thresh=5.0):
+                 num_featues=10000, reproj_thresh=5.0):
     """
     main function for image stitching 
     
@@ -109,6 +109,9 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         matches = bf.match(des1,des2)
         matches = sorted(matches, key = lambda x:x.distance)
+        # img = cv2.drawMatches(final_mosaic, kp1, image, kp2, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        # plt.imshow(img)
+        # plt.show()
         src_pts=np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
         dst_pts=np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
         M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, reproj_thresh)
@@ -118,7 +121,7 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         
     return avg_repro_error, matches_list
 
-num_imgs_to_use = 1
+num_imgs_to_use = 5
 raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))[:num_imgs_to_use+1]
 mosaic_name     = 'chandigarh_20images.png'
 
