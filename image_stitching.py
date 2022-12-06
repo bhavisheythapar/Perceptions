@@ -12,6 +12,29 @@ import numpy as np
 from matplotlib import pyplot as plt
 import glob
 
+def find_reprojection_error(src_pts, dst_pts, M, mosaic_shape):
+    """
+    function to find reprojection error
+
+    Args:
+        src_pts : source points
+        dst_pts : destination points
+        M       : homography matrix
+
+    Returns:
+        reprojection_error : average reprojection error"""
+
+    error = 0
+    for i in range(len(src_pts)):
+        src_pt = src_pts[i]
+        dst_pt = dst_pts[i]
+        src_pt = np.append(src_pt, 1)
+        transformed_pt = M @ src_pt
+        transformed_pt = transformed_pt[0:2]
+        error += np.linalg.norm(transformed_pt - dst_pt)
+    reprojection_error = error/len(src_pts)
+    # normalized_error = np.round(reprojection_error/(mosaic_shape[0]*mosaic_shape[1]),2)
+    return reprojection_error
 
 def stitch_images(img1, img2, H):
     """
@@ -92,10 +115,10 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
     height, width = first_image.shape[:2]
     first_image   = cv2.resize(first_image, (int(width/4), int(height/4)))
     final_mosaic  = first_image
-    img_count     = 0
+    cv2.imwrite(mosaic_name, final_mosaic)
     
-    for img_name in raw_image_list[1:]:
-        image = cv2.imread(img_name)              
+    while raw_image_list:
+        image = cv2.imread(raw_image_list.pop(0))          
         height, width = image.shape[:2]        
         image = cv2.resize(image, (int(width/4), int(height/4)))
 
@@ -129,34 +152,39 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         # Apply homography to current image and obtain the resultant mosaic
         final_mosaic = stitch_images(final_mosaic, image, M)
         cv2.imwrite(mosaic_name, final_mosaic)        
-        
-        img_count += 1        
-        if img_count==num_imgs_to_use:
-            break
-        
-         ### NOT REQUIRED RIGHT NOW ####
-          ## Find the euclidean distance error
-#         src_pts      = np.array(src_pts)    
-#         dst_pts      = np.array(dst_pts)
-#         dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
-#         ones         = np.ones(len(src_pts))    
-#         test_pts     = np.transpose(np.reshape(src_pts, (len(src_pts), 2)))
-#         test_pts_hom = np.vstack((test_pts, ones))  
-#         ## projecting the points in test image to collage image using homography matrix
-#         projected_pts_H  = np.matmul(M, test_pts_hom)      
-#         projected_pts_nH = np.transpose(np.array([np.true_divide(projected_pts_H[0,:], projected_pts_H[2,:]),                                                   np.true_divide(projected_pts_H[1,:], projected_pts_H[2,:])]))        
-#         error     = int(np.sum(np.linalg.norm(projected_pts_nH-dst_pts, axis=1)))
-#         avg_error = np.divide(np.array(error), np.array(len(src_pts)))     
-#         avg_repro_error.append(avg_error)
-        
-        
-    
-    return avg_repro_error, matches_list
+ 
+        # Find reprojection error
+        avg_repro_error.append(find_reprojection_error(all_src_pts, all_dst_pts, M, final_mosaic.shape))
 
+        # src_pts      = np.array(src_pts)    
+        # dst_pts      = np.array(dst_pts)
+        # dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
+        # ones         = np.ones(len(src_pts))    
+        # test_pts     = np.transpose(np.reshape(src_pts, (len(src_pts), 2)))
+        # test_pts_hom = np.vstack((test_pts, ones))  
+        # ## projecting the points in test image to collage image using homography matrix
+        # projected_pts_H  = np.matmul(M, test_pts_hom)      
+        # projected_pts_nH = np.transpose(np.array([np.true_divide(projected_pts_H[0,:], projected_pts_H[2,:]),np.true_divide(projected_pts_H[1,:], projected_pts_H[2,:])]))        
+        # error     = int(np.sum(np.linalg.norm(projected_pts_nH-dst_pts, axis=1)))
+        # avg_error = np.divide(np.array(error), np.array(len(src_pts)))     
+        # print(avg_error)
+        # avg_repro_error.append(avg_error)
+        
+    return avg_repro_error
 
-raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))
-num_imgs_to_use = 20
+num_imgs_to_use = 5
+raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))[:num_imgs_to_use+1]
 mosaic_name     = 'chandigarh_20images.png'
 
 if __name__=='__main__':
-    _, _ = build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name)
+    error = np.array(build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name))
+
+plt.plot(error)
+plt.xlabel('Number of Images')
+plt.ylabel('Average Reprojection Error')
+plt.xticks(np.arange(0, num_imgs_to_use+1, 1))
+plt.title('Average Reprojection Error vs Number of Images')
+plt.show()
+
+cv2.imshow('mosaic', cv2.imread(mosaic_name))
+cv2.waitKey(0)
