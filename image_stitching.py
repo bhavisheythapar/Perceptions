@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 import glob
+import pickle
 
 # Function to draw matches on an image
 def draw_matches (img1, kp1, img2, kp2, matches):
@@ -109,7 +110,7 @@ def stitch_images(img1, img2, H):
 
 
 def build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name, 
-                 num_features=10000, reproj_thresh=2.0):
+                 num_features=10000, reproj_thresh=2.0, flag_save=False):
     """
     main function for image stitching 
     
@@ -119,6 +120,7 @@ def build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name,
         mosaic_base_name : base name of the stitched mosaic 
         num_featues      : number of keypoints to extract from feature detector; optional; default=1000
         reproj_thresh    : reprojection error threshold in pixels; optional; default=5.0
+        flag_save        : flag to check whether to save mosaic on the disk
         
         
     Returns:
@@ -136,7 +138,8 @@ def build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name,
     first_image     = cv2.resize(first_image, (int(width/4), int(height/4)))
     stitched_mosaic = first_image
     img_count       += 1
-    cv2.imwrite(save_mosaic_dir + mosaic_base_name + str(img_count) + '.png', stitched_mosaic)
+    if flag_save:
+        cv2.imwrite(save_mosaic_dir + mosaic_base_name + str(img_count) + '.png', stitched_mosaic)
     
     
     while raw_image_list:
@@ -176,7 +179,8 @@ def build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name,
         
         # Apply homography to current image and obtain the resultant mosaic
         stitched_mosaic = stitch_images(stitched_mosaic, image, H)
-        cv2.imwrite(save_mosaic_dir + mosaic_base_name + str(img_count) + '.png', stitched_mosaic)        
+        if flag_save:
+            cv2.imwrite(save_mosaic_dir + mosaic_base_name + str(img_count) + '.png', stitched_mosaic)        
  
         # Find reprojection error
         cur_error = find_reprojection_error(src_pts, dst_pts, H)
@@ -186,16 +190,24 @@ def build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name,
     return avg_repro_error
 
 ## User Input ##
-num_imgs_to_use  = 10
+num_imgs_to_use  = 4
 raw_img_dir      = '/Users/adityajain/Downloads/raw_images/*.JPG'
 save_mosaic_dir  = '/Users/adityajain/Downloads/mosaics/'
-mosaic_base_name = 'chandigarh_imgs-'
+error_data_dir   = '/Users/adityajain/Downloads/error_data/'
+mosaic_base_name = 'city_imgs-'
+flag_save        = False                     # whether to save mosaic on disc
+dataset          = 'city'
+ftr_detector     = 'sift'
+num_keypoints    = 10000
+error_filename   = dataset+'_'+ftr_detector+'_'+str(num_keypoints)+'.pkl'
 ################
 
 raw_image_list   = sorted(glob.glob(raw_img_dir))[:num_imgs_to_use]
 
 if __name__=='__main__':
-    error = build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name, num_features=10000)
+    error = build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name, num_features=num_keypoints, flag_save=flag_save)
+    with open(error_data_dir + error_filename, 'wb') as f:
+        pickle.dump(error, f)
 
 print(error)
 # plt.plot(error)
