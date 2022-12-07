@@ -12,6 +12,25 @@ import numpy as np
 from matplotlib import pyplot as plt
 import glob
 
+# Function to draw matches on an image
+def draw_matches (img1, kp1, img2, kp2, matches):
+    """
+    function to draw matches on an image
+
+    Args:
+        img1    : first image
+        kp1     : keypoints in first image
+        img2    : second image
+        kp2     : keypoints in second image
+        matches : matches between keypoints in first and second image
+
+    Returns:
+        img3    : image with matches drawn on it
+    """
+    img3 = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags=2)
+    cv2.imshow('Matches', img3)
+
+
 def find_reprojection_error(src_pts, dst_pts, M, mosaic_shape):
     """
     function to find reprojection error
@@ -33,7 +52,7 @@ def find_reprojection_error(src_pts, dst_pts, M, mosaic_shape):
         transformed_pt = transformed_pt[0:2]
         error += np.linalg.norm(transformed_pt - dst_pt)
     reprojection_error = error/len(src_pts)
-    # normalized_error = np.round(reprojection_error/(mosaic_shape[0]*mosaic_shape[1]),2)
+
     return reprojection_error
 
 def stitch_images(img1, img2, H):
@@ -88,8 +107,8 @@ def stitch_images(img1, img2, H):
     return output_img
 
 
-def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name, 
-                 num_featues=10000, reproj_thresh=5.0):
+def build_mosaic(raw_image_list, mosaic_name, 
+                 num_features=10000, reproj_thresh=5.0):
     """
     main function for image stitching 
     
@@ -108,16 +127,18 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
     
     avg_repro_error = []  # list of average reprojection error
     matches_list    = []  # list of number of good matches at every stage
-    sift            = cv2.SIFT_create(num_featues)
+    sift            = cv2.SIFT_create(num_features)
+
     
     # starting out with first image
-    first_image   = cv2.imread(raw_image_list[0])
+    first_image   = cv2.imread(raw_image_list.pop(0))
     height, width = first_image.shape[:2]
     first_image   = cv2.resize(first_image, (int(width/4), int(height/4)))
     final_mosaic  = first_image
     cv2.imwrite(mosaic_name, final_mosaic)
     
     while raw_image_list:
+
         image = cv2.imread(raw_image_list.pop(0))          
         height, width = image.shape[:2]        
         image = cv2.resize(image, (int(width/4), int(height/4)))
@@ -125,37 +146,38 @@ def build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name,
         # Find the features
         kp1, des1 = sift.detectAndCompute(cv2.cvtColor(final_mosaic,cv2.COLOR_BGR2GRAY),None)  
         kp2, des2 = sift.detectAndCompute(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY),None)
-        
-        # Feature matching      
+
+        # # Feature matching      
         FLANN_INDEX_KDTREE = 0
         index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
         search_params = dict(checks = 50)
         flann = cv2.FlannBasedMatcher(index_params, search_params)
-        matches = flann.knnMatch(des1,des2,k=2)        
-        
+        matches = flann.knnMatch(des1,des2,k=2)
+
         # Store all good matches as per Lowe's ratio test
         good       = []
         all_points = []
         for m,n in matches:
-            if m.distance < 0.7*n.distance:
+            if m.distance < 0.3*n.distance:
                 good.append(m)                
             all_points.append(m)        
-        matches_list.append(len(good))        
-        
+        matches_list.append(len(good))
+
+        draw_matches(final_mosaic, kp1, image, kp2, good)
+
         # Find homography
         src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
         dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)        
         all_src_pts = np.float32([ kp1[m.queryIdx].pt for m in all_points ]).reshape(-1,1,2)
         all_dst_pts = np.float32([ kp2[m.trainIdx].pt for m in all_points ]).reshape(-1,1,2)        
-        M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC,reproj_thresh)
+        M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, reproj_thresh)
         
         # Apply homography to current image and obtain the resultant mosaic
         final_mosaic = stitch_images(final_mosaic, image, M)
         cv2.imwrite(mosaic_name, final_mosaic)        
  
         # Find reprojection error
-        avg_repro_error.append(find_reprojection_error(all_src_pts, all_dst_pts, M, final_mosaic.shape))
-
+        avg_repro_error.append(find_reprojection_error(src_pts, dst_pts, M, final_mosaic.shape))
         # src_pts      = np.array(src_pts)    
         # dst_pts      = np.array(dst_pts)
         # dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
@@ -177,14 +199,13 @@ raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))[:num_imgs_to_use+1]
 mosaic_name     = 'chandigarh_20images.png'
 
 if __name__=='__main__':
-    error = np.array(build_mosaic(raw_image_list, num_imgs_to_use, mosaic_name))
+    error = np.array(build_mosaic(raw_image_list, mosaic_name, num_features=10000))
 
+print(error)
 plt.plot(error)
 plt.xlabel('Number of Images')
 plt.ylabel('Average Reprojection Error')
-plt.xticks(np.arange(0, num_imgs_to_use+1, 1))
 plt.title('Average Reprojection Error vs Number of Images')
 plt.show()
-
 cv2.imshow('mosaic', cv2.imread(mosaic_name))
 cv2.waitKey(0)
