@@ -206,6 +206,7 @@ raw_image_list   = sorted(glob.glob(raw_img_dir))[:num_imgs_to_use]
 
 if __name__=='__main__':
     error = build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name, num_features=num_keypoints, flag_save=flag_save)
+    print(f'Error list {error}')
     with open(error_data_dir + error_filename, 'wb') as f:
         pickle.dump(error, f)
 
