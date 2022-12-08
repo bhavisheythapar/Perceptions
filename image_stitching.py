@@ -13,6 +13,22 @@ from matplotlib import pyplot as plt
 import glob
 import pickle
 
+def draw_keypoints(img, kp):
+    """
+    function to draw keypoints on an image
+
+    Args:
+        img : image
+        kp  : keypoints
+
+    Returns:
+        img : image with keypoints drawn on it
+    """
+    img_kp = cv2.drawKeypoints(img, kp, None, color=(0, 255, 0), flags=0)
+
+    cv2.imshow('Keypoints', img_kp)
+    cv2.waitKey(0)
+    
 # Function to draw matches on an image
 def draw_matches (img1, kp1, img2, kp2, matches):
     """

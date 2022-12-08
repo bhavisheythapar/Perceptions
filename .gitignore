@@ -163,3 +163,4 @@ cython_debug/
 raw_images/
 *.png
 agriculture_images/
+.vscode
