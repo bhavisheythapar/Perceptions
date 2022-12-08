@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 import glob
+import pickle
 
 # Function to draw matches on an image
 def draw_matches (img1, kp1, img2, kp2, matches):
@@ -28,10 +29,10 @@ def draw_matches (img1, kp1, img2, kp2, matches):
         img3    : image with matches drawn on it
     """
     img3 = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags=2)
-    cv2.imshow('Matches', img3)
+    # cv2.imshow('Matches', img3)
 
 
-def find_reprojection_error(src_pts, dst_pts, M, mosaic_shape):
+def find_reprojection_error(src_pts, dst_pts, M):
     """
     function to find reprojection error
 
@@ -49,6 +50,7 @@ def find_reprojection_error(src_pts, dst_pts, M, mosaic_shape):
         dst_pt = dst_pts[i]
         src_pt = np.append(src_pt, 1)
         transformed_pt = M @ src_pt
+        transformed_pt = transformed_pt/transformed_pt[2]
         transformed_pt = transformed_pt[0:2]
         error += np.linalg.norm(transformed_pt - dst_pt)
     reprojection_error = error/len(src_pts)
@@ -107,44 +109,49 @@ def stitch_images(img1, img2, H):
     return output_img
 
 
-def build_mosaic(raw_image_list, mosaic_name, 
-                 num_features=10000, reproj_thresh=5.0):
+def build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name, 
+                 num_features=10000, reproj_thresh=2.0, flag_save=False):
     """
     main function for image stitching 
     
     Args:
-        raw_image_list  : sorted list of raw image paths to be stitched
-        num_imgs_to_use : number of images to build a mosaic for
-        mosaic_name     : name of the final sitched image
-        num_featues     : number of keypoints to extract from feature detector; optional; default=1000
-        reproj_thresh   : reprojection error threshold in pixels; optional; default=5.0
+        raw_image_list   : sorted list of raw image paths to be stitched
+        save_mosaic_dir  : directory to save the mosaic
+        mosaic_base_name : base name of the stitched mosaic 
+        num_featues      : number of keypoints to extract from feature detector; optional; default=1000
+        reproj_thresh    : reprojection error threshold in pixels; optional; default=5.0
+        flag_save        : flag to check whether to save mosaic on the disk
         
         
     Returns:
         avg_repro_error : list of average reprojection error
-        matches         : list of number of good matches
     """
     
     avg_repro_error = []  # list of average reprojection error
     matches_list    = []  # list of number of good matches at every stage
     sift            = cv2.SIFT_create(num_features)
-
+    img_count       = 0
     
     # starting out with first image
-    first_image   = cv2.imread(raw_image_list.pop(0))
-    height, width = first_image.shape[:2]
-    first_image   = cv2.resize(first_image, (int(width/4), int(height/4)))
-    final_mosaic  = first_image
-    cv2.imwrite(mosaic_name, final_mosaic)
+    first_image     = cv2.imread(raw_image_list.pop(0))
+    height, width   = first_image.shape[:2]
+    first_image     = cv2.resize(first_image, (int(width/4), int(height/4)))
+    stitched_mosaic = first_image
+    img_count       += 1
+    if flag_save:
+        cv2.imwrite(save_mosaic_dir + mosaic_base_name + str(img_count) + '.png', stitched_mosaic)
+    
     
     while raw_image_list:
-
-        image = cv2.imread(raw_image_list.pop(0))          
+        image_name = raw_image_list.pop(0)
+        img_count  += 1
+        print(f'Stitching for image {image_name}')
+        image = cv2.imread(image_name)          
         height, width = image.shape[:2]        
         image = cv2.resize(image, (int(width/4), int(height/4)))
 
         # Find the features
-        kp1, des1 = sift.detectAndCompute(cv2.cvtColor(final_mosaic,cv2.COLOR_BGR2GRAY),None)  
+        kp1, des1 = sift.detectAndCompute(cv2.cvtColor(stitched_mosaic,cv2.COLOR_BGR2GRAY),None)  
         kp2, des2 = sift.detectAndCompute(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY),None)
 
         # # Feature matching      
@@ -163,49 +170,51 @@ def build_mosaic(raw_image_list, mosaic_name,
             all_points.append(m)        
         matches_list.append(len(good))
 
-        draw_matches(final_mosaic, kp1, image, kp2, good)
+        # draw_matches(final_mosaic, kp1, image, kp2, good)
 
         # Find homography
-        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)        
-        all_src_pts = np.float32([ kp1[m.queryIdx].pt for m in all_points ]).reshape(-1,1,2)
-        all_dst_pts = np.float32([ kp2[m.trainIdx].pt for m in all_points ]).reshape(-1,1,2)        
-        M, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, reproj_thresh)
+        dst_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+        src_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)               
+        H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, reproj_thresh)
         
         # Apply homography to current image and obtain the resultant mosaic
-        final_mosaic = stitch_images(final_mosaic, image, M)
-        cv2.imwrite(mosaic_name, final_mosaic)        
+        stitched_mosaic = stitch_images(stitched_mosaic, image, H)
+        if flag_save:
+            cv2.imwrite(save_mosaic_dir + mosaic_base_name + str(img_count) + '.png', stitched_mosaic)        
  
         # Find reprojection error
-        avg_repro_error.append(find_reprojection_error(src_pts, dst_pts, M, final_mosaic.shape))
-        # src_pts      = np.array(src_pts)    
-        # dst_pts      = np.array(dst_pts)
-        # dst_pts      = np.reshape(dst_pts, (len(dst_pts), 2))
-        # ones         = np.ones(len(src_pts))    
-        # test_pts     = np.transpose(np.reshape(src_pts, (len(src_pts), 2)))
-        # test_pts_hom = np.vstack((test_pts, ones))  
-        # ## projecting the points in test image to collage image using homography matrix
-        # projected_pts_H  = np.matmul(M, test_pts_hom)      
-        # projected_pts_nH = np.transpose(np.array([np.true_divide(projected_pts_H[0,:], projected_pts_H[2,:]),np.true_divide(projected_pts_H[1,:], projected_pts_H[2,:])]))        
-        # error     = int(np.sum(np.linalg.norm(projected_pts_nH-dst_pts, axis=1)))
-        # avg_error = np.divide(np.array(error), np.array(len(src_pts)))     
-        # print(avg_error)
-        # avg_repro_error.append(avg_error)
+        cur_error = find_reprojection_error(src_pts, dst_pts, H)
+        print(f'Current reprojection error {cur_error}')
+        avg_repro_error.append(cur_error)
         
     return avg_repro_error
 
-num_imgs_to_use = 5
-raw_image_list  = sorted(glob.glob('./raw_images/*.JPG'))[:num_imgs_to_use+1]
-mosaic_name     = 'chandigarh_20images.png'
+## User Input ##
+num_imgs_to_use  = 4
+raw_img_dir      = '/Users/adityajain/Downloads/raw_images/*.JPG'
+save_mosaic_dir  = '/Users/adityajain/Downloads/mosaics/'
+error_data_dir   = '/Users/adityajain/Downloads/error_data/'
+mosaic_base_name = 'city_imgs-'
+flag_save        = False                     # whether to save mosaic on disc
+dataset          = 'city'
+ftr_detector     = 'sift'
+num_keypoints    = 10000
+error_filename   = dataset+'_'+ftr_detector+'_'+str(num_keypoints)+'.pkl'
+################
+
+raw_image_list   = sorted(glob.glob(raw_img_dir))[:num_imgs_to_use]
 
 if __name__=='__main__':
-    error = np.array(build_mosaic(raw_image_list, mosaic_name, num_features=10000))
+    error = build_mosaic(raw_image_list, save_mosaic_dir, mosaic_base_name, num_features=num_keypoints, flag_save=flag_save)
+    print(f'Error list {error}')
+    with open(error_data_dir + error_filename, 'wb') as f:
+        pickle.dump(error, f)
 
 print(error)
-plt.plot(error)
-plt.xlabel('Number of Images')
-plt.ylabel('Average Reprojection Error')
-plt.title('Average Reprojection Error vs Number of Images')
-plt.show()
-cv2.imshow('mosaic', cv2.imread(mosaic_name))
-cv2.waitKey(0)
+# plt.plot(error)
+# plt.xlabel('Number of images')
+# plt.ylabel('Average reprojection error')
+# plt.title('Average reprojection error vs Number of images')
+# plt.show()
+# cv2.imshow('mosaic', cv2.imread(mosaic_name))
+# cv2.waitKey(0)
