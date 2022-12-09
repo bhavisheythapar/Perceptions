@@ -161,6 +161,5 @@ cython_debug/
 
 # Images
 raw_images/
-*.png
 agriculture_images/
 .vscode
